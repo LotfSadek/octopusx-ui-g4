@@ -2,70 +2,51 @@
 
 import type React from "react"
 
-import { useChat } from "@ai-sdk/react"
-import { useEffect, useRef, useState } from "react"
+import { useChat } from "ai/react"
+import { useEffect, useRef } from "react"
+import { MessageList } from "./message-list"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { MessageList } from "@/components/message-list"
-import { FileUpload } from "@/components/file-upload"
-import { Send, Paperclip, Zap, Shield, AlertTriangle, Activity } from "lucide-react"
+import { Send, Paperclip, Shield, AlertTriangle, Search, Database } from "lucide-react"
+import { FileUpload } from "./file-upload"
 import type { Conversation } from "@/types/conversation"
-import { cn } from "@/lib/utils"
+import { LLM_CONFIG } from "@/lib/config"
 
 interface ChatInterfaceProps {
-  conversationId: string | null
-  onUpdateTitle: (id: string, title: string) => void
-  onCreateConversation: (firstMessage: string) => string
-  conversations: Conversation[]
-  setConversations: (conversations: Conversation[]) => void
+  conversation?: Conversation
+  onUpdateConversation: (id: string, updates: Partial<Conversation>) => void
+  onCreateConversation: () => void
 }
 
-export function ChatInterface({
-  conversationId,
-  onUpdateTitle,
-  onCreateConversation,
-  conversations,
-  setConversations,
-}: ChatInterfaceProps) {
-  const [showFileUpload, setShowFileUpload] = useState(false)
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+export function ChatInterface({ conversation, onUpdateConversation, onCreateConversation }: ChatInterfaceProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, setMessages } = useChat({
     api: "/api/chat",
-    body: {
-      conversationId,
-      files: uploadedFiles.map((file) => ({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-      })),
-    },
     onFinish: (message) => {
-      // Update conversation title if it's the first message
-      if (conversationId && messages.length === 0) {
-        const title = input.slice(0, 50) + (input.length > 50 ? "..." : "")
-        onUpdateTitle(conversationId, title)
+      if (conversation) {
+        // Update existing conversation
+        const updatedMessages = [...messages, message]
+        onUpdateConversation(conversation.id, {
+          messages: updatedMessages,
+          title:
+            conversation.title === `Conversation ${conversation.id}` && messages.length === 1
+              ? messages[0].content.slice(0, 50) + (messages[0].content.length > 50 ? "..." : "")
+              : conversation.title,
+        })
       }
     },
   })
 
-  // Custom submit handler to create conversation if needed
-  const handleCustomSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
-    if (!input.trim() && uploadedFiles.length === 0) return
-
-    // If no conversation exists, create one
-    if (!conversationId) {
-      onCreateConversation(input.trim() || "File Analysis")
-      return
+  // Load conversation messages when conversation changes
+  useEffect(() => {
+    if (conversation) {
+      setMessages(conversation.messages)
+    } else {
+      setMessages([])
     }
-
-    // Normal submit
-    handleSubmit(e)
-  }
+  }, [conversation, setMessages])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -75,177 +56,133 @@ export function ChatInterface({
     }
   }, [input])
 
-  // Auto-submit when conversation is created
-  useEffect(() => {
-    if (conversationId && input.trim() && messages.length === 0) {
-      // Small delay to ensure the conversation is properly set up
-      setTimeout(() => {
-        const form = document.querySelector("form") as HTMLFormElement
-        if (form) {
-          handleSubmit(new Event("submit") as any)
-        }
-      }, 100)
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!input.trim()) return
+
+    // If no conversation exists, create one first
+    if (!conversation) {
+      onCreateConversation()
+      // The conversation will be created and this component will re-render
+      // We'll handle the message submission in the next render cycle
+      return
     }
-  }, [conversationId, input, messages.length, handleSubmit])
 
-  const handleFileUpload = (files: File[]) => {
-    setUploadedFiles((prev) => [...prev, ...files])
-    setShowFileUpload(false)
-  }
-
-  const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+    handleSubmit(e)
   }
 
   const quickPrompts = [
     {
       icon: Shield,
       title: "Threat Analysis",
-      prompt: "Analyze the latest security threats and provide mitigation strategies",
+      prompt: "Analyze this potential security threat and provide recommendations for mitigation.",
     },
     {
       icon: AlertTriangle,
       title: "Incident Response",
-      prompt: "Help me create an incident response plan for a potential data breach",
+      prompt: "Guide me through the incident response process for a suspected data breach.",
     },
     {
-      icon: Activity,
+      icon: Search,
       title: "Log Analysis",
-      prompt: "Analyze these security logs for suspicious activities and patterns",
+      prompt: "Help me analyze these security logs for suspicious activities.",
     },
     {
-      icon: Zap,
+      icon: Database,
       title: "Vulnerability Assessment",
-      prompt: "Perform a vulnerability assessment on the provided system information",
+      prompt: "Perform a vulnerability assessment on my network infrastructure.",
     },
   ]
 
   const handleQuickPrompt = (prompt: string) => {
-    if (!conversationId) {
-      onCreateConversation(prompt)
+    if (!conversation) {
+      onCreateConversation()
     }
-    // Set the input and let the useEffect handle submission
     handleInputChange({ target: { value: prompt } } as any)
   }
 
-  const showWelcome = !conversationId && messages.length === 0
-
   return (
-    <div className="flex-1 flex flex-col">
-      {/* Messages Area */}
-      <ScrollArea className="flex-1 p-4">
-        {showWelcome ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-2xl mx-auto p-8">
-              <Shield className="h-16 w-16 text-green-400 mx-auto mb-6" />
-              <h2 className="text-2xl font-bold text-green-100 mb-4">Welcome to OctopusX</h2>
-              <p className="text-green-400/70 mb-8">
-                Your AI-powered Security Operations Center assistant. Start typing below or choose a quick prompt to
-                begin analyzing threats, incidents, and security data.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {quickPrompts.map((prompt, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="p-6 h-auto flex flex-col items-start space-y-2 border-green-500/30 hover:border-green-500/50 hover:bg-green-600/10 bg-transparent"
-                    onClick={() => handleQuickPrompt(prompt.prompt)}
-                  >
-                    <prompt.icon className="h-6 w-6 text-green-400" />
-                    <div className="text-left">
-                      <div className="font-semibold text-green-100">{prompt.title}</div>
-                      <div className="text-sm text-green-400/70">{prompt.prompt}</div>
-                    </div>
-                  </Button>
-                ))}
-              </div>
+    <div className="flex-1 flex flex-col min-h-0">
+      {!conversation || messages.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 max-w-4xl mx-auto w-full">
+          <div className="text-center mb-12">
+            <div className="flex items-center justify-center mb-6">
+              <Shield className="h-16 w-16 text-green-500 animate-pulse-green" />
             </div>
+            <h1 className="text-4xl font-bold text-white mb-4">Welcome to OctopusX</h1>
+            <p className="text-xl text-gray-400 mb-2">Your Advanced Cybersecurity AI Assistant</p>
+            <p className="text-sm text-gray-500">
+              Powered by {LLM_CONFIG.provider === "openai" ? "OpenAI" : "Langchain"} • Ready for SOC Operations
+            </p>
           </div>
-        ) : (
-          <MessageList messages={messages} isLoading={isLoading} />
-        )}
-      </ScrollArea>
 
-      {/* Input Area */}
-      <div className="border-t border-green-500/20 bg-gray-900/50 backdrop-blur-sm p-4">
-        {/* File Upload Area */}
-        {showFileUpload && (
-          <div className="mb-4">
-            <FileUpload onFileUpload={handleFileUpload} />
-          </div>
-        )}
-
-        {/* Uploaded Files */}
-        {uploadedFiles.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-2">
-            {uploadedFiles.map((file, index) => (
-              <div
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12 w-full max-w-2xl">
+            {quickPrompts.map((prompt, index) => (
+              <Button
                 key={index}
-                className="flex items-center space-x-2 bg-green-600/20 border border-green-500/30 rounded-lg px-3 py-2"
+                variant="outline"
+                className="h-auto p-6 border-green-600/30 hover:border-green-500/50 hover:bg-green-900/20 text-left flex flex-col items-start gap-3 transition-all duration-200 bg-transparent"
+                onClick={() => handleQuickPrompt(prompt.prompt)}
               >
-                <Paperclip className="h-4 w-4 text-green-400" />
-                <span className="text-sm text-green-100">{file.name}</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => removeFile(index)}
-                  className="h-4 w-4 p-0 text-red-400 hover:text-red-300"
-                >
-                  ×
-                </Button>
-              </div>
+                <prompt.icon className="h-6 w-6 text-green-500" />
+                <div>
+                  <div className="font-semibold text-white mb-1">{prompt.title}</div>
+                  <div className="text-sm text-gray-400 line-clamp-2">{prompt.prompt}</div>
+                </div>
+              </Button>
             ))}
           </div>
-        )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-hidden">
+          <MessageList messages={messages} isLoading={isLoading} />
+        </div>
+      )}
 
-        <form onSubmit={handleCustomSubmit} className="flex items-end space-x-2">
-          <div className="flex-1 relative">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={handleInputChange}
-              placeholder={
-                showWelcome
-                  ? "Ask me about security threats, analyze logs, or upload files..."
-                  : "Describe your security concern or upload files for analysis..."
-              }
-              className="min-h-[60px] max-h-[200px] resize-none bg-gray-800 border-green-500/30 focus:border-green-500 text-green-100 placeholder:text-green-400/50"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  handleCustomSubmit(e as any)
+      <div className="border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm p-4">
+        <form onSubmit={handleFormSubmit} className="max-w-4xl mx-auto">
+          <div className="flex items-end gap-3">
+            <div className="flex-1 relative">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={handleInputChange}
+                placeholder={
+                  !conversation
+                    ? "Start a new conversation about cybersecurity..."
+                    : "Ask about threats, incidents, or security analysis..."
                 }
-              }}
-            />
-          </div>
-
-          <div className="flex flex-col space-y-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setShowFileUpload(!showFileUpload)}
-              className={cn("border-green-500/30 hover:border-green-500/50", showFileUpload && "bg-green-600/20")}
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+                className="min-h-[60px] max-h-[200px] resize-none bg-gray-800/50 border-gray-700 focus:border-green-500 text-white placeholder-gray-400 pr-12"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault()
+                    handleFormSubmit(e)
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-2 bottom-2 h-8 w-8 p-0 text-gray-400 hover:text-green-400"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </div>
 
             <Button
               type="submit"
-              disabled={isLoading || (!input.trim() && uploadedFiles.length === 0)}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+              disabled={!input.trim() || isLoading}
+              className="h-[60px] px-6 bg-green-600 hover:bg-green-700 text-white"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-5 w-5" />
             </Button>
           </div>
-        </form>
 
-        <div className="mt-2 text-xs text-green-400/50 text-center">
-          {showWelcome
-            ? "Start your first security analysis conversation"
-            : "OctopusX can analyze security logs, PDFs, and provide threat intelligence"}
-        </div>
+          <FileUpload ref={fileInputRef} />
+        </form>
       </div>
     </div>
   )
