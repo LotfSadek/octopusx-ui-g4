@@ -1,15 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Header } from "@/components/header"
 import { Sidebar } from "@/components/sidebar"
+import { Header } from "@/components/header"
 import { ChatInterface } from "@/components/chat-interface"
 import type { Conversation } from "@/types/conversation"
 
 export default function Home() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Load conversations from localStorage on mount
   useEffect(() => {
@@ -36,22 +36,32 @@ export default function Home() {
     }
   }, [conversations])
 
-  const createNewConversation = () => {
+  const createConversation = (firstMessage: string): string => {
+    const newId = Date.now().toString()
     const newConversation: Conversation = {
-      id: Date.now().toString(),
-      title: `Conversation ${conversations.length + 1}`,
+      id: newId,
+      title: firstMessage.slice(0, 50) + (firstMessage.length > 50 ? "..." : ""),
       messages: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
     setConversations((prev) => [newConversation, ...prev])
-    setCurrentConversationId(newConversation.id)
+    setCurrentConversationId(newId)
+    return newId
   }
 
-  const updateConversation = (id: string, updates: Partial<Conversation>) => {
+  const updateConversationTitle = (id: string, title: string) => {
     setConversations((prev) =>
-      prev.map((conv) => (conv.id === id ? { ...conv, ...updates, updatedAt: new Date() } : conv)),
+      prev.map((conv) =>
+        conv.id === id
+          ? {
+              ...conv,
+              title,
+              updatedAt: new Date(),
+            }
+          : conv,
+      ),
     )
   }
 
@@ -62,27 +72,39 @@ export default function Home() {
     }
   }
 
+  const selectConversation = (id: string) => {
+    setCurrentConversationId(id)
+    setSidebarOpen(false)
+  }
+
+  const startNewConversation = () => {
+    setCurrentConversationId(null)
+    setSidebarOpen(false)
+  }
+
   const currentConversation = conversations.find((conv) => conv.id === currentConversationId)
 
   return (
-    <div className="flex h-screen bg-gray-950">
+    <div className="flex h-screen bg-gray-950 text-white">
       <Sidebar
         conversations={conversations}
         currentConversationId={currentConversationId}
-        onSelectConversation={setCurrentConversationId}
-        onNewConversation={createNewConversation}
+        onSelectConversation={selectConversation}
         onDeleteConversation={deleteConversation}
+        onNewConversation={startNewConversation}
         isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onClose={() => setSidebarOpen(false)}
       />
 
-      <div className="flex-1 flex flex-col">
-        <Header onNewConversation={createNewConversation} />
+      <div className="flex-1 flex flex-col min-w-0">
+        <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
         <ChatInterface
-          conversation={currentConversation}
-          onUpdateConversation={updateConversation}
-          onCreateConversation={createNewConversation}
+          conversationId={currentConversationId}
+          onUpdateTitle={updateConversationTitle}
+          onCreateConversation={createConversation}
+          conversations={conversations}
+          setConversations={setConversations}
         />
       </div>
     </div>

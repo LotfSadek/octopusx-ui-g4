@@ -1,5 +1,5 @@
 export const LLM_CONFIG = {
-  // Change this to switch between providers: 'openai' | 'langchain'
+  // Set to 'openai' for OpenAI integration
   provider: "openai" as "openai" | "langchain",
 
   // OpenAI Configuration
@@ -9,7 +9,7 @@ export const LLM_CONFIG = {
     maxTokens: 2000,
   },
 
-  // Langchain Configuration
+  // Langchain Configuration (for future use)
   langchain: {
     endpoint: process.env.LANGCHAIN_ENDPOINT || "http://localhost:8000/chat",
     timeout: 30000,

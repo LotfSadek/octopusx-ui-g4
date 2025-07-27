@@ -1,19 +1,31 @@
 import { streamText } from "ai"
 import { openai } from "@ai-sdk/openai"
-import { LLM_CONFIG } from "@/lib/config"
+
+export const maxDuration = 30
 
 export async function POST(req: Request) {
   try {
-    const { messages, files } = await req.json()
+    const { messages, conversationId, files } = await req.json()
 
-    if (LLM_CONFIG.provider === "openai") {
-      // OpenAI Integration
-      const result = streamText({
-        model: openai(LLM_CONFIG.openai.model),
-        messages,
-        temperature: LLM_CONFIG.openai.temperature,
-        maxTokens: LLM_CONFIG.openai.maxTokens,
-        system: `You are OctopusX, an advanced cybersecurity AI assistant designed for SOC (Security Operations Center) operations. You specialize in:
+    console.log("Chat API called with:", {
+      messagesCount: messages?.length,
+      conversationId,
+      filesCount: files?.length,
+    })
+
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OpenAI API key not found")
+      return Response.json({ error: "OpenAI API key not configured" }, { status: 500 })
+    }
+
+    console.log("Processing messages:", messages)
+
+    const result = streamText({
+      model: openai("gpt-4o-mini"),
+      messages,
+      temperature: 0.7,
+      maxTokens: 2000,
+      system: `You are OctopusX, an advanced cybersecurity AI assistant designed for SOC (Security Operations Center) operations. You specialize in:
 
 - Threat detection and analysis
 - Incident response guidance
@@ -22,49 +34,29 @@ export async function POST(req: Request) {
 - Malware analysis
 - Network security monitoring
 - Compliance and risk assessment
+- Log analysis and forensics
+- Security automation and orchestration
 
-Provide detailed, actionable cybersecurity insights and recommendations. Always prioritize security best practices and include relevant technical details when appropriate.`,
-      })
+Provide detailed, actionable cybersecurity insights and recommendations. Always prioritize security best practices and include relevant technical details when appropriate. When analyzing files or logs, focus on security implications, potential threats, and recommended mitigation strategies.
 
-      return result.toDataStreamResponse()
-    } else {
-      // Langchain Integration
-      const response = await fetch(LLM_CONFIG.langchain.endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.LANGCHAIN_API_KEY}`,
-        },
-        body: JSON.stringify({
-          messages: messages.map((msg: any) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-          files: files || [],
-          stream: LLM_CONFIG.langchain.streaming,
-        }),
-        signal: AbortSignal.timeout(LLM_CONFIG.langchain.timeout),
-      })
+Respond in a professional, technical manner appropriate for SOC analysts and security professionals.`,
+    })
 
-      if (!response.ok) {
-        throw new Error(`Langchain API error: ${response.status}`)
-      }
-
-      if (LLM_CONFIG.langchain.streaming) {
-        // Return streaming response
-        return new Response(response.body, {
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8",
-          },
-        })
-      } else {
-        // Return non-streaming response
-        const data = await response.json()
-        return Response.json({ content: data.response })
-      }
-    }
+    console.log("Streaming response created")
+    return result.toDataStreamResponse({
+      getErrorMessage: (error) => {
+        console.error("Stream error:", error)
+        return error instanceof Error ? error.message : "An error occurred"
+      },
+    })
   } catch (error) {
     console.error("Chat API error:", error)
-    return Response.json({ error: "Failed to process chat request" }, { status: 500 })
+    return Response.json(
+      {
+        error: "Failed to process chat request",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

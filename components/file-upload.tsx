@@ -2,8 +2,7 @@
 
 import { useCallback, useState } from "react"
 import { useDropzone } from "react-dropzone"
-import { Upload } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Upload, type File } from "lucide-react"
 
 interface FileUploadProps {
   onFileUpload: (files: File[]) => void
@@ -24,10 +23,10 @@ export function FileUpload({ onFileUpload }: FileUploadProps) {
     onDrop,
     accept: {
       "application/pdf": [".pdf"],
-      "text/plain": [".txt"],
-      "text/csv": [".csv"],
+      "text/plain": [".txt", ".log"],
       "application/json": [".json"],
-      "text/xml": [".xml"],
+      "text/csv": [".csv"],
+      "application/xml": [".xml"],
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
       "application/vnd.ms-excel": [".xls"],
     },
@@ -39,31 +38,18 @@ export function FileUpload({ onFileUpload }: FileUploadProps) {
   return (
     <div
       {...getRootProps()}
-      className={cn(
-        "border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors",
+      className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
         isDragActive || dragActive
-          ? "border-green-500 bg-green-500/10"
-          : "border-green-500/30 hover:border-green-500/50 hover:bg-green-500/5",
-      )}
+          ? "border-green-500 bg-green-900/20"
+          : "border-gray-600 hover:border-green-500/50 hover:bg-gray-800/50"
+      }`}
     >
       <input {...getInputProps()} />
-
-      <div className="flex flex-col items-center space-y-3">
-        <div className="p-3 rounded-full bg-green-600/20 border border-green-500/30">
-          <Upload className="h-6 w-6 text-green-400" />
-        </div>
-
-        <div>
-          <p className="text-green-100 font-medium">Drop security files here or click to browse</p>
-          <p className="text-green-400/70 text-sm mt-1">Supports PDF, TXT, CSV, JSON, XML, Excel files</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-xs text-green-400/60">
-          <span className="px-2 py-1 bg-green-600/10 rounded border border-green-500/20">Security Logs</span>
-          <span className="px-2 py-1 bg-green-600/10 rounded border border-green-500/20">Threat Reports</span>
-          <span className="px-2 py-1 bg-green-600/10 rounded border border-green-500/20">Incident Data</span>
-        </div>
-      </div>
+      <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+      <p className="text-sm text-gray-400 mb-2">
+        {isDragActive ? "Drop files here..." : "Drag & drop files here, or click to select"}
+      </p>
+      <p className="text-xs text-gray-500">Supports: PDF, TXT, CSV, JSON, XML, Excel, Log files</p>
     </div>
   )
 }

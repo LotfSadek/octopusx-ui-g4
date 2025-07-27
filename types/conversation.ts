@@ -1,7 +1,9 @@
+import type { Message } from "ai"
+
 export interface Conversation {
   id: string
   title: string
-  messages: any[]
-  createdAt: Date | string
-  updatedAt: Date | string
+  messages: Message[]
+  createdAt: Date
+  updatedAt: Date
 }
